@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt;
 from pyod.models.knn import KNN;
 import sklearn.metrics as metrics;
 from scipy.stats import uniform;
-from math import *;
+import numpy as np;
+import math;
 
 def ex12(contamination=0.1):
     gen_data = data.generate_data(400, 100, 2, contamination=contamination);
@@ -46,30 +47,79 @@ def ex12(contamination=0.1):
 
     plt.savefig("roc_curve.png");
 
-def normal_gen(distributions, n=1000):
-    vals = [0 for i in range(n)];
+def gen_params(n=10):
+    means = np.random.uniform(low=-50.0, high=50.0, size=n);
+    covar = np.random.uniform(low=0.0, high=5.0, size=(n, n));
+    covar = covar @ covar.transpose();
+
+    return means, covar
+
+def solve_upper_triangle(A, b):
+    n = len(b);
+    for i in range(n - 1, -1, -1):
+        b[i] /= A[i, i];
+        b[:i] -= A[:i, i] * b[i];
+
+    return b
+
+def solve_lower_triangle(A, b):
+    n = len(b);
     for i in range(n):
-        val = [0 for j in range(len(distributions))];
+        b[i] /= A[i, i];
 
-        for j in range(len(distributions)):
-            mu = distributions[j][0];
-            var = distributions[j][1];
-            U = uniform.rvs(size=1)[0];
-            V = uniform.rvs(size=1)[0];
+        if i != n - 1:
+            b[i + 1:] -= A[i + 1, i] * b[i];
 
-            val[j] = sqrt(-2 * log(U)) * sin(2 * pi * V);
-            val[j] = mu + val[j] * var;
-            vals[i] = val;
+    return b
 
-    return vals
+def preprocess(A):
+    n = len(A);
+    B = np.copy(A);
 
-def ex34(data):
-    vals = generator([(20, 5), (10, 6), (0, 2)]);
-    print(vals);
+    for i in range(n):
+        B[i, i] = math.sqrt(B[i, i]);
+        B[i + 1:, i] /= B[i, i];
 
+        for j in range(i + 1, n):
+            B[j:, j] -= B[j:, i] * B[j, i];
 
+    return B
+
+def solve_system(A, b):
+    y = np.copy(b);
+
+    y = solve_upper_triangle(np.transpose(A), y);
+    y = solve_lower_triangle(A, y);
+
+    return y;
+
+def ex3(gen_data,  n=1000, d=1):
+    # for i in range(10):
+    #     counts, bins = np.histogram(gen_data[:, i]);
+    #     plt.stairs(counts, bins);
+    # plt.savefig("hist.png")
+    return 1
+
+def ex4(n=1000, d=10):
+    (means, covar) = gen_params();
+    gen_data = np.random.multivariate_normal(means, covar, size=n);
+
+    quantile = np.quantile(gen_data, 0.9);
+    print("Quantile: ", quantile);
+    preprocessed = preprocess(covar);
+    cnt = 0;
+    
+    for X in gen_data:
+        y = X - means;
+        Z_score = math.sqrt(np.sum(np.dot(y, solve_system(preprocessed, y))));
+        #print(Z_score);
+        if Z_score > quantile:
+            cnt += 1;
+
+    print(cnt);
 
 # Remove comment to run exercises 1 and 2
 # ex12();
 
-ex34(normal_gen);
+# Remove comment to run exercise 4
+ex4()

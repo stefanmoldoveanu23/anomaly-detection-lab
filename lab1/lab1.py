@@ -49,10 +49,17 @@ def ex12(contamination=0.1):
 
 def gen_params(n=10):
     means = np.random.uniform(low=-50.0, high=50.0, size=n);
-    covar = np.random.uniform(low=0.0, high=5.0, size=(n, n));
+    covar = np.random.uniform(low=0.0, high=1.0, size=(n, n));
     covar = covar @ covar.transpose();
+    #for i in range(n):
+    #    for j in range(n):
+    #        if i != j:
+    #            covar[i, j] = 0;
 
-    return means, covar
+    # diag = math.sqrt(np.diagonal(covar));
+    # correl = np.atleast_2d(diag).T @ covar @ diag;
+
+    return means, covar, covar
 
 def solve_upper_triangle(A, b):
     n = len(b);
@@ -68,7 +75,7 @@ def solve_lower_triangle(A, b):
         b[i] /= A[i, i];
 
         if i != n - 1:
-            b[i + 1:] -= A[i + 1, i] * b[i];
+            b[i + 1:] -= A[i + 1:, i] * b[i];
 
     return b
 
@@ -88,8 +95,8 @@ def preprocess(A):
 def solve_system(A, b):
     y = np.copy(b);
 
-    y = solve_upper_triangle(np.transpose(A), y);
     y = solve_lower_triangle(A, y);
+    y = solve_upper_triangle(np.transpose(A), y);
 
     return y;
 
@@ -101,25 +108,51 @@ def ex3(gen_data,  n=1000, d=1):
     return 1
 
 def ex4(n=1000, d=10):
-    (means, covar) = gen_params();
-    gen_data = np.random.multivariate_normal(means, covar, size=n);
+    (means, covar, correl) = gen_params(d);
+    gen_data = np.random.multivariate_normal(means, covar, size=n//10*9);
+    anomalies = np.random.uniform(low=-100.0, high=100.0, size=(n//10, d));
+    gen_data = np.concatenate((gen_data, anomalies));
 
-    quantile = np.quantile(gen_data, 0.9);
-    print("Quantile: ", quantile);
+    # print(covar);
     preprocessed = preprocess(covar);
-    cnt = 0;
-    
+
+    quantile = np.quantile(gen_data[:n//10*9], 0.95, axis=0);
+    TP = 0;
+    TN = 0;
+    FP = 0;
+    FN = 0;
+    i = 0;
+
+    y_threshold = quantile - means;
+    Z_threshold = math.sqrt((y_threshold @ np.atleast_2d(solve_system(preprocessed, y_threshold)).T)[0]);
+
     for X in gen_data:
         y = X - means;
-        Z_score = math.sqrt(np.sum(np.dot(y, solve_system(preprocessed, y))));
-        #print(Z_score);
-        if Z_score > quantile:
-            cnt += 1;
+        # print(np.transpose(y), solve_system(preprocessed, y));
+        Z_score = math.sqrt((y @ np.atleast_2d(solve_system(preprocessed, y)).T)[0]);
+        # print(Z_score);
+        if Z_score > Z_threshold:
+            if i >= n // 10 * 9:
+                TP += 1;
+            else:
+                FP += 1;
+        else:
+            if i >= n // 10 * 9:
+                FN += 1;
+            else:
+                TN += 1;
 
-    print(cnt);
+        i += 1;
+
+    TPR = TP / (TP + FN);
+    TNR = TN / (TN + FP);
+    BA = (TPR + TNR) / 2;
+
+    print("Balanced accuracy:", BA);
 
 # Remove comment to run exercises 1 and 2
 # ex12();
 
 # Remove comment to run exercise 4
-ex4()
+ex4(100000)
+

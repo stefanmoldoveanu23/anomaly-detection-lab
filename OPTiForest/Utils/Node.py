@@ -6,10 +6,7 @@ from typing import Dict, Any
 
 
 class Node:
-    val = 0
-
     def __init__(self, data: Data, children: Dict[Any, Node] = None, bucket_size=3):
-        Node.val += 1
         self.data = data
         self.children = {} if children is None else children
         self.clustered = children is not None
@@ -46,3 +43,15 @@ class Node:
                 return self.children[self.l2sh.get_bucket(x)]
             else:
                 return None
+
+    def get_branching_factor(self) -> (int, int):
+        if self.children is None:
+            return 0, 0
+
+        branches, nodes = len(self.children.keys()), 1
+        for child in self.children.values():
+            branch, node = child.get_branching_factor()
+            branches += branch
+            nodes += node
+
+        return branches, nodes
